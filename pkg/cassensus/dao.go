@@ -24,6 +24,18 @@ func getIn64(m map[string]interface{}, key string) int64 {
 	return 0
 }
 
+func buildResult(q *gocqlx.Queryx) (bool, Lease, error) {
+	m := map[string]interface{}{}
+	applied, err := q.MapScanCAS(m)
+	l := Lease{
+		Name:    getString(m, "name"),
+		Owner:   getString(m, "owner"),
+		Value:   getString(m, "value"),
+		Created: getIn64(m, "created"),
+	}
+	return applied, l, err
+}
+
 type dao struct {
 	table   string
 	session *gocql.Session
@@ -35,15 +47,7 @@ func (d dao) Acquire(name, owner string) (bool, Lease, error) {
 		"name":  name,
 		"owner": owner,
 	})
-	m := map[string]interface{}{}
-	applied, err := q.MapScanCAS(m)
-	l := Lease{
-		Name:    getString(m, "name"),
-		Owner:   getString(m, "owner"),
-		Value:   getString(m, "value"),
-		Created: getIn64(m, "created"),
-	}
-	return applied, l, err
+	return buildResult(q)
 }
 
 func (d dao) Renew(name, owner string) (bool, Lease, error) {
@@ -52,15 +56,7 @@ func (d dao) Renew(name, owner string) (bool, Lease, error) {
 		"name":  name,
 		"owner": owner,
 	})
-	m := map[string]interface{}{}
-	applied, err := q.MapScanCAS(m)
-	l := Lease{
-		Name:    getString(m, "name"),
-		Owner:   getString(m, "owner"),
-		Value:   getString(m, "value"),
-		Created: getIn64(m, "created"),
-	}
-	return applied, l, err
+	return buildResult(q)
 }
 
 func (d dao) Release(name, owner string) (bool, Lease, error) {
@@ -69,15 +65,7 @@ func (d dao) Release(name, owner string) (bool, Lease, error) {
 		"name":  name,
 		"owner": owner,
 	})
-	m := map[string]interface{}{}
-	ok, err := q.MapScanCAS(m)
-	l := Lease{
-		Name:    getString(m, "name"),
-		Owner:   getString(m, "owner"),
-		Value:   getString(m, "value"),
-		Created: getIn64(m, "created"),
-	}
-	return ok, l, err
+	return buildResult(q)
 }
 
 func (d dao) Read(name string) (Lease, error) {
