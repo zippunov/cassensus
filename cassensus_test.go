@@ -3,6 +3,7 @@ package cassensus
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rs/xid"
 	"github.com/zippunov/cassensus/pkg/cassensus"
@@ -115,6 +116,41 @@ func TestReleaseWhileLocked(t *testing.T) {
 	}
 	if lease.Owner != ownerID {
 		t.Errorf("Got wrong  lease owner %s", lease.Owner)
+	}
+}
+
+func TestAcquireExtended(t *testing.T) {
+	var k = "key_" + xid.New().String()
+	ok, _, err := cass.AcquireExt(k, ownerID, "Payload #1", 1)
+	if !ok {
+		t.Errorf("Got NOT ok result")
+	}
+	if err != nil {
+		t.Errorf("Got and error %v", err)
+	}
+	data, err := cass.Read(k)
+	if err != nil {
+		t.Errorf("Got and error %v", err)
+	}
+	if data.Name != k {
+		t.Errorf("Key mismatch")
+	}
+	if data.Owner != ownerID {
+		t.Errorf("Owner mismatch")
+	}
+	if data.Created == 0 {
+		t.Errorf("Empty created field")
+	}
+	if data.Payload != "Payload #1" {
+		t.Errorf("Wrong payload")
+	}
+	time.Sleep(time.Second * 1)
+	data, err = cass.Read(k)
+	if err != nil {
+		t.Errorf("Got and error %v", err)
+	}
+	if data.Name != "" || data.Owner != "" || data.Payload != "" || data.Created != 0 {
+		t.Errorf("Custom expire did not work")
 	}
 }
 

@@ -7,5 +7,5 @@ use cassensus;
 CREATE TABLE leases (
       name text PRIMARY KEY,
       owner text,
-      value text
+      payload text
  ) with default_time_to_live = 30;

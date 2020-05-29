@@ -1,38 +1,19 @@
 package cassensus
 
 import (
+	"time"
+
 	"github.com/gocql/gocql"
+	"github.com/mitchellh/mapstructure"
 	"github.com/scylladb/gocqlx"
 	"github.com/scylladb/gocqlx/qb"
 )
 
-func getString(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; !ok {
-		return ""
-	} else if str, ok := val.(string); ok {
-		return str
-	}
-	return ""
-}
-
-func getIn64(m map[string]interface{}, key string) int64 {
-	if val, ok := m[key]; !ok {
-		return 0
-	} else if i, ok := val.(int64); ok {
-		return i
-	}
-	return 0
-}
-
 func buildResult(q *gocqlx.Queryx) (bool, Lease, error) {
 	m := map[string]interface{}{}
 	applied, err := q.MapScanCAS(m)
-	l := Lease{
-		Name:    getString(m, "name"),
-		Owner:   getString(m, "owner"),
-		Value:   getString(m, "value"),
-		Created: getIn64(m, "created"),
-	}
+	l := Lease{}
+	_ = mapstructure.Decode(m, &l)
 	return applied, l, err
 }
 
@@ -50,11 +31,33 @@ func (d dao) Acquire(name, owner string) (bool, Lease, error) {
 	return buildResult(q)
 }
 
+func (d dao) AcquireExt(name, owner, payload string, ttl int) (bool, Lease, error) {
+	dur := time.Second * time.Duration(ttl)
+	stmt, names := qb.Insert(d.table).Columns("name", "owner", "payload").TTL(dur).Unique().ToCql()
+	q := gocqlx.Query(d.session.Query(stmt), names).BindMap(qb.M{
+		"name":    name,
+		"owner":   owner,
+		"payload": payload,
+	})
+	return buildResult(q)
+}
+
 func (d dao) Renew(name, owner string) (bool, Lease, error) {
 	stmt, names := qb.Update(d.table).Set("owner").Where(qb.Eq("name")).If(qb.Eq("owner")).ToCql()
 	q := gocqlx.Query(d.session.Query(stmt), names).BindMap(qb.M{
 		"name":  name,
 		"owner": owner,
+	})
+	return buildResult(q)
+}
+
+func (d dao) RenewExt(name, owner, payload string, ttl int) (bool, Lease, error) {
+	dur := time.Second * time.Duration(ttl)
+	stmt, names := qb.Update(d.table).Set("owner", "payload").Where(qb.Eq("name")).TTL(dur).If(qb.Eq("owner")).ToCql()
+	q := gocqlx.Query(d.session.Query(stmt), names).BindMap(qb.M{
+		"name":    name,
+		"owner":   owner,
+		"payload": payload,
 	})
 	return buildResult(q)
 }
@@ -69,7 +72,7 @@ func (d dao) Release(name, owner string) (bool, Lease, error) {
 }
 
 func (d dao) Read(name string) (Lease, error) {
-	stmt, names := qb.Select(d.table).Columns("writetime(owner) as created", "name", "value", "owner").Where(qb.Eq("name")).Limit(1).ToCql()
+	stmt, names := qb.Select(d.table).Columns("writetime(owner) as created", "name", "payload", "owner").Where(qb.Eq("name")).Limit(1).ToCql()
 	q := gocqlx.Query(d.session.Query(stmt), names).BindMap(qb.M{
 		"name": name,
 	})

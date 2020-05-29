@@ -31,8 +31,16 @@ func (d *CassensusManager) Acquire(name, owner string) (bool, Lease, error) {
 	return d.dao.Acquire(name, owner)
 }
 
+func (d *CassensusManager) AcquireExt(name, owner, payload string, ttl int) (bool, Lease, error) {
+	return d.dao.AcquireExt(name, owner, payload, ttl)
+}
+
 func (d *CassensusManager) Renew(name, owner string) (bool, Lease, error) {
 	return d.dao.Renew(name, owner)
+}
+
+func (d *CassensusManager) RenewExt(name, owner, payload string, ttl int) (bool, Lease, error) {
+	return d.dao.RenewExt(name, owner, payload, ttl)
 }
 
 func (d *CassensusManager) Release(name, owner string) (bool, Lease, error) {
